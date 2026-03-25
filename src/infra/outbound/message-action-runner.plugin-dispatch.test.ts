@@ -654,6 +654,105 @@ describe("runMessageAction plugin dispatch", () => {
     });
   });
 
+  describe("telegram thread-create aliasing", () => {
+    const handleAction = vi.fn(
+      async ({ action, params }: { action: string; params: Record<string, unknown> }) =>
+        jsonResult({
+          ok: true,
+          action,
+          params,
+        }),
+    );
+
+    const telegramThreadPlugin: ChannelPlugin = {
+      id: "telegram",
+      meta: {
+        id: "telegram",
+        label: "Telegram",
+        selectionLabel: "Telegram",
+        docsPath: "/channels/telegram",
+        blurb: "Telegram topic-create alias test plugin.",
+      },
+      capabilities: { chatTypes: ["direct"] },
+      config: createAlwaysConfiguredPluginConfig(),
+      messaging: {
+        targetResolver: {
+          looksLikeId: () => true,
+        },
+      },
+      actions: {
+        describeMessageTool: () => ({ actions: ["topic-create"] }),
+        supportsAction: ({ action }) => action === "topic-create",
+        handleAction,
+      },
+    };
+
+    beforeEach(() => {
+      setActivePluginRegistry(
+        createTestRegistry([
+          {
+            pluginId: "telegram",
+            source: "test",
+            plugin: telegramThreadPlugin,
+          },
+        ]),
+      );
+      handleAction.mockClear();
+    });
+
+    afterEach(() => {
+      setActivePluginRegistry(createTestRegistry([]));
+      vi.clearAllMocks();
+    });
+
+    it("rewrites thread-create to topic-create after implicit telegram selection", async () => {
+      const result = await runMessageAction({
+        cfg: {
+          channels: {
+            telegram: {
+              botToken: "tok",
+            },
+          },
+        } as OpenClawConfig,
+        action: "thread-create",
+        params: {
+          target: "telegram:123",
+          threadName: "Build Updates",
+          message: "hello",
+        },
+        dryRun: false,
+      });
+
+      expect(result.kind).toBe("action");
+      expect(result.channel).toBe("telegram");
+      expect(result.action).toBe("topic-create");
+      expect(handleAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: "topic-create",
+          channel: "telegram",
+          params: expect.objectContaining({
+            to: "telegram:123",
+            name: "Build Updates",
+            message: "hello",
+          }),
+        }),
+      );
+      const handled = handleAction.mock.calls.at(0)?.[0] as
+        | {
+            params: Record<string, unknown>;
+          }
+        | undefined;
+      expect(handled?.params).not.toHaveProperty("threadName");
+      expect(result.payload).toMatchObject({
+        ok: true,
+        action: "topic-create",
+        params: expect.objectContaining({
+          name: "Build Updates",
+        }),
+      });
+    });
+  });
+
   describe("accountId defaults", () => {
     const handleAction = vi.fn(async () => jsonResult({ ok: true }));
     const accountPlugin: ChannelPlugin = {

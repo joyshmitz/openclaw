@@ -21,7 +21,7 @@ describe("registerMessageThreadCommands", () => {
     runMessageAction.mockClear();
   });
 
-  it("routes Telegram thread create to topic-create with Telegram params", async () => {
+  it("forwards Telegram thread create through the shared thread-create action", async () => {
     const message = new Command().exitOverride();
     registerMessageThreadCommands(message, createHelpers(runMessageAction));
 
@@ -42,16 +42,16 @@ describe("registerMessageThreadCommands", () => {
     );
 
     expect(runMessageAction).toHaveBeenCalledWith(
-      "topic-create",
+      "thread-create",
       expect.objectContaining({
         channel: " Telegram ",
         target: "-1001234567890",
-        name: "Build Updates",
+        threadName: "Build Updates",
         message: "hello",
       }),
     );
     const telegramCall = runMessageAction.mock.calls.at(0);
-    expect(telegramCall?.[1]).not.toHaveProperty("threadName");
+    expect(telegramCall?.[1]).not.toHaveProperty("name");
   });
 
   it("keeps non-Telegram thread create on thread-create params", async () => {

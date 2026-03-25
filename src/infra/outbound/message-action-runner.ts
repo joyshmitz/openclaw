@@ -270,6 +270,7 @@ async function resolveActionTarget(params: {
 
 type ResolvedActionContext = {
   cfg: OpenClawConfig;
+  action: ChannelMessageActionName;
   params: Record<string, unknown>;
   channel: ChannelId;
   mediaLocalRoots: readonly string[];
@@ -281,6 +282,31 @@ type ResolvedActionContext = {
   resolvedTarget?: ResolvedMessagingTarget;
   abortSignal?: AbortSignal;
 };
+
+function resolveChannelSpecificMessageAction(params: {
+  action: ChannelMessageActionName;
+  channel: ChannelId;
+  args: Record<string, unknown>;
+}): {
+  action: ChannelMessageActionName;
+  params: Record<string, unknown>;
+} {
+  if (params.action !== "thread-create" || params.channel !== "telegram") {
+    return {
+      action: params.action,
+      params: params.args,
+    };
+  }
+  const { threadName, ...rest } = params.args;
+  return {
+    action: "topic-create",
+    params: {
+      ...rest,
+      name: typeof threadName === "string" ? threadName : undefined,
+    },
+  };
+}
+
 function resolveGateway(input: RunMessageActionParams): MessageActionRunnerGateway | undefined {
   if (!input.gateway) {
     return undefined;
@@ -650,7 +676,7 @@ async function handlePluginAction(ctx: ResolvedActionContext): Promise<MessageAc
     agentId,
   } = ctx;
   throwIfAborted(abortSignal);
-  const action = input.action as Exclude<ChannelMessageActionName, "send" | "poll" | "broadcast">;
+  const action = ctx.action as Exclude<ChannelMessageActionName, "send" | "poll" | "broadcast">;
   if (dryRun) {
     return {
       kind: "action",
@@ -711,7 +737,7 @@ export async function runMessageAction(
   parseComponentsParam(params);
   parseInteractiveParam(params);
 
-  const action = input.action;
+  let action = input.action;
   if (action === "broadcast") {
     return handleBroadcastAction(input, params);
   }
@@ -722,6 +748,13 @@ export async function runMessageAction(
   });
 
   const channel = await resolveChannel(cfg, params, input.toolContext);
+  const channelSpecificAction = resolveChannelSpecificMessageAction({
+    action,
+    channel,
+    args: params,
+  });
+  action = channelSpecificAction.action;
+  params = channelSpecificAction.params;
   let accountId = readStringParam(params, "accountId") ?? input.defaultAccountId;
   if (!accountId && resolvedAgentId) {
     const byAgent = buildChannelAccountBindings(cfg).get(channel);
@@ -789,6 +822,7 @@ export async function runMessageAction(
   if (action === "send") {
     return handleSendAction({
       cfg,
+      action,
       params,
       channel,
       mediaLocalRoots,
@@ -805,6 +839,7 @@ export async function runMessageAction(
   if (action === "poll") {
     return handlePollAction({
       cfg,
+      action,
       params,
       channel,
       mediaLocalRoots,
@@ -818,6 +853,7 @@ export async function runMessageAction(
 
   return handlePluginAction({
     cfg,
+    action,
     params,
     channel,
     mediaLocalRoots,
