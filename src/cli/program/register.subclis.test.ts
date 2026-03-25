@@ -18,6 +18,15 @@ const { nodesAction, registerNodesCli } = vi.hoisted(() => {
   return { nodesAction: action, registerNodesCli: register };
 });
 
+const { pluginCliRegister, registerPluginsCli } = vi.hoisted(() => {
+  const registerPluginCliCommands = vi.fn();
+  const registerPluginsCli = vi.fn((program: Command) => {
+    const plugins = program.command("plugins");
+    plugins.command("inspect");
+  });
+  return { pluginCliRegister: registerPluginCliCommands, registerPluginsCli };
+});
+
 const configModule = vi.hoisted(() => ({
   loadConfig: vi.fn(),
   readConfigFileSnapshot: vi.fn(),
@@ -25,9 +34,17 @@ const configModule = vi.hoisted(() => ({
 
 vi.mock("../acp-cli.js", () => ({ registerAcpCli }));
 vi.mock("../nodes-cli.js", () => ({ registerNodesCli }));
+vi.mock("../plugins-cli.js", () => ({ registerPluginsCli }));
 vi.mock("../../config/config.js", () => configModule);
+vi.mock("../../plugins/cli.js", () => ({ registerPluginCliCommands: pluginCliRegister }));
 
-const mockedModuleIds = ["../acp-cli.js", "../nodes-cli.js", "../../config/config.js"];
+const mockedModuleIds = [
+  "../acp-cli.js",
+  "../nodes-cli.js",
+  "../plugins-cli.js",
+  "../../config/config.js",
+  "../../plugins/cli.js",
+];
 
 const { loadValidatedConfigForPluginRegistration, registerSubCliByName, registerSubCliCommands } =
   await import("./register.subclis.js");
@@ -63,6 +80,8 @@ describe("registerSubCliCommands", () => {
     acpAction.mockClear();
     registerNodesCli.mockClear();
     nodesAction.mockClear();
+    registerPluginsCli.mockClear();
+    pluginCliRegister.mockClear();
     configModule.loadConfig.mockReset();
     configModule.readConfigFileSnapshot.mockReset();
   });
@@ -141,5 +160,14 @@ describe("registerSubCliCommands", () => {
     await program.parseAsync(["acp"], { from: "user" });
     expect(registerAcpCli).toHaveBeenCalledTimes(1);
     expect(acpAction).toHaveBeenCalledTimes(1);
+  });
+
+  it("registers the plugins subcli without loading plugin-owned CLI commands", async () => {
+    const program = createRegisteredProgram(["node", "openclaw", "plugins", "inspect"], "openclaw");
+
+    await registerSubCliByName(program, "plugins");
+
+    expect(registerPluginsCli).toHaveBeenCalledTimes(1);
+    expect(pluginCliRegister).not.toHaveBeenCalled();
   });
 });

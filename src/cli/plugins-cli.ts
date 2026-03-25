@@ -325,12 +325,12 @@ export function registerPluginsCli(program: Command) {
     .option("--json", "Print JSON")
     .action((id: string | undefined, opts: PluginInspectOptions) => {
       const cfg = loadConfig();
-      const report = buildPluginStatusReport({ config: cfg });
       if (opts.all) {
         if (id) {
           defaultRuntime.error("Pass either a plugin id or --all, not both.");
           return defaultRuntime.exit(1);
         }
+        const report = buildPluginStatusReport({ config: cfg });
         const inspectAll = buildAllPluginInspectReports({
           config: cfg,
           report,
@@ -401,7 +401,6 @@ export function registerPluginsCli(program: Command) {
       const inspect = buildPluginInspectReport({
         id,
         config: cfg,
-        report,
       });
       if (!inspect) {
         defaultRuntime.error(`Plugin not found: ${id}`);

@@ -152,6 +152,7 @@ export function buildPluginStatusReport(params?: {
   workspaceDir?: string;
   /** Use an explicit env when plugin roots should resolve independently from process.env. */
   env?: NodeJS.ProcessEnv;
+  onlyPluginIds?: string[];
 }): PluginStatusReport {
   const rawConfig = params?.config ?? loadConfig();
   const config = resolveStatusConfig(rawConfig, params?.env);
@@ -184,6 +185,7 @@ export function buildPluginStatusReport(params?: {
     config: runtimeCompatConfig,
     workspaceDir,
     env: params?.env,
+    onlyPluginIds: params?.onlyPluginIds,
     logger: createPluginLoaderLogger(log),
   });
 
@@ -249,14 +251,23 @@ export function buildPluginInspectReport(params: {
 }): PluginInspectReport | null {
   const rawConfig = params.config ?? loadConfig();
   const config = resolveStatusConfig(rawConfig, params.env);
-  const report =
+  let report =
     params.report ??
     buildPluginStatusReport({
       config,
       workspaceDir: params.workspaceDir,
       env: params.env,
+      onlyPluginIds: [params.id],
     });
-  const plugin = report.plugins.find((entry) => entry.id === params.id || entry.name === params.id);
+  let plugin = report.plugins.find((entry) => entry.id === params.id || entry.name === params.id);
+  if (!plugin && !params.report) {
+    report = buildPluginStatusReport({
+      config,
+      workspaceDir: params.workspaceDir,
+      env: params.env,
+    });
+    plugin = report.plugins.find((entry) => entry.id === params.id || entry.name === params.id);
+  }
   if (!plugin) {
     return null;
   }
