@@ -13,6 +13,7 @@ import {
   getMemoryPromptSectionBuilder,
   restoreMemoryPromptSection,
 } from "../memory/prompt-section.js";
+import { createLazyRuntimeMethod, createLazyRuntimeModule } from "../shared/lazy-runtime.js";
 import { resolveUserPath } from "../utils.js";
 import { inspectBundleMcpRuntimeSupport } from "./bundle-mcp.js";
 import { clearPluginCommands } from "./command-registry-state.js";
@@ -751,16 +752,60 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
 
   let createPluginRuntimeFactory: ((options?: CreatePluginRuntimeOptions) => PluginRuntime) | null =
     null;
+  let runtimeModulePath: string | null | undefined;
+  const resolveRuntimeModulePath = (): string => {
+    if (runtimeModulePath !== undefined) {
+      if (!runtimeModulePath) {
+        throw new Error("Unable to resolve plugin runtime module");
+      }
+      return runtimeModulePath;
+    }
+    runtimeModulePath = resolvePluginRuntimeModulePath();
+    if (!runtimeModulePath) {
+      throw new Error("Unable to resolve plugin runtime module");
+    }
+    return runtimeModulePath;
+  };
+
+  const runtimeSubmodulePathCache = new Map<string, string | null>();
+  const resolveRuntimeSubmodulePath = (baseName: string): string | null => {
+    const cached = runtimeSubmodulePathCache.get(baseName);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const baseDir = path.dirname(resolveRuntimeModulePath());
+    const candidates = [`${baseName}.ts`, `${baseName}.js`].map((candidate) =>
+      path.join(baseDir, candidate),
+    );
+    const resolved = candidates.find((candidate) => fs.existsSync(candidate)) ?? null;
+    runtimeSubmodulePathCache.set(baseName, resolved);
+    return resolved;
+  };
+
+  const runtimeSubmoduleLoaderCache = new Map<string, () => Promise<unknown>>();
+  const resolveRuntimeSubmoduleLoader = <TModule>(baseName: string): (() => Promise<TModule>) => {
+    const cached = runtimeSubmoduleLoaderCache.get(baseName);
+    if (cached) {
+      return cached as () => Promise<TModule>;
+    }
+    const modulePath = resolveRuntimeSubmodulePath(baseName);
+    if (!modulePath) {
+      throw new Error(`Unable to resolve plugin runtime submodule: ${baseName}`);
+    }
+    const load = createLazyRuntimeModule(() =>
+      Promise.resolve(getJiti(modulePath)(modulePath) as TModule),
+    );
+    runtimeSubmoduleLoaderCache.set(baseName, load as () => Promise<unknown>);
+    return load;
+  };
+
   const resolveCreatePluginRuntime = (): ((
     options?: CreatePluginRuntimeOptions,
   ) => PluginRuntime) => {
     if (createPluginRuntimeFactory) {
       return createPluginRuntimeFactory;
     }
-    const runtimeModulePath = resolvePluginRuntimeModulePath();
-    if (!runtimeModulePath) {
-      throw new Error("Unable to resolve plugin runtime module");
-    }
+    const runtimeModulePath = resolveRuntimeModulePath();
     const runtimeModule = getJiti(runtimeModulePath)(runtimeModulePath) as {
       createPluginRuntime?: (options?: CreatePluginRuntimeOptions) => PluginRuntime;
     };
@@ -779,7 +824,49 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
     return resolvedRuntime;
   };
   const lazyRuntimeReflectionKeySet = new Set<PropertyKey>(LAZY_RUNTIME_REFLECTION_KEYS);
+  const directLazyRuntimeValues = new Map<PropertyKey, unknown>();
+  const resolveDirectLazyRuntimeValue = (prop: PropertyKey): unknown => {
+    const cached = directLazyRuntimeValues.get(prop);
+    if (cached !== undefined) {
+      return cached;
+    }
+    if (prop !== "modelAuth") {
+      return undefined;
+    }
+    type RuntimeModelAuthModule = {
+      getApiKeyForModel: PluginRuntime["modelAuth"]["getApiKeyForModel"];
+      resolveApiKeyForProvider: PluginRuntime["modelAuth"]["resolveApiKeyForProvider"];
+    };
+    const loadModelAuthRuntime = resolveRuntimeSubmoduleLoader<RuntimeModelAuthModule>(
+      "runtime-model-auth.runtime",
+    );
+    const value: PluginRuntime["modelAuth"] = {
+      getApiKeyForModel: createLazyRuntimeMethod(
+        loadModelAuthRuntime,
+        (runtimeModule) => runtimeModule.getApiKeyForModel,
+      ),
+      resolveApiKeyForProvider: createLazyRuntimeMethod(
+        loadModelAuthRuntime,
+        (runtimeModule) => runtimeModule.resolveApiKeyForProvider,
+      ),
+    };
+    directLazyRuntimeValues.set(prop, value);
+    return value;
+  };
   const resolveLazyRuntimeDescriptor = (prop: PropertyKey): PropertyDescriptor | undefined => {
+    const directLazyValue = resolveDirectLazyRuntimeValue(prop);
+    if (directLazyValue !== undefined) {
+      return {
+        configurable: true,
+        enumerable: true,
+        get() {
+          return resolveDirectLazyRuntimeValue(prop);
+        },
+        set(value: unknown) {
+          directLazyRuntimeValues.set(prop, value);
+        },
+      };
+    }
     if (!lazyRuntimeReflectionKeySet.has(prop)) {
       return Reflect.getOwnPropertyDescriptor(resolveRuntime() as object, prop);
     }
@@ -796,9 +883,17 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
   };
   const runtime = new Proxy({} as PluginRuntime, {
     get(_target, prop, receiver) {
+      const directLazyValue = resolveDirectLazyRuntimeValue(prop);
+      if (directLazyValue !== undefined) {
+        return directLazyValue;
+      }
       return Reflect.get(resolveRuntime(), prop, receiver);
     },
     set(_target, prop, value, receiver) {
+      if (resolveDirectLazyRuntimeValue(prop) !== undefined) {
+        directLazyRuntimeValues.set(prop, value);
+        return true;
+      }
       return Reflect.set(resolveRuntime(), prop, value, receiver);
     },
     has(_target, prop) {

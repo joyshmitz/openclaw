@@ -241,11 +241,6 @@ const entries: SubCliEntry[] = [
     register: async (program) => {
       const mod = await import("../plugins-cli.js");
       mod.registerPluginsCli(program);
-      const { registerPluginCliCommands } = await import("../../plugins/cli.js");
-      const config = await loadValidatedConfigForPluginRegistration();
-      if (config) {
-        registerPluginCliCommands(program, config);
-      }
     },
   },
   {

@@ -16,6 +16,8 @@ export const enablePluginInConfig = vi.fn();
 export const recordPluginInstall = vi.fn();
 export const clearPluginManifestRegistryCache = vi.fn();
 export const buildPluginStatusReport = vi.fn();
+export const buildPluginInspectReport = vi.fn();
+export const buildAllPluginInspectReports = vi.fn();
 export const applyExclusiveSlotSelection = vi.fn();
 export const uninstallPlugin = vi.fn();
 export const updateNpmInstalledPlugins = vi.fn();
@@ -69,6 +71,10 @@ vi.mock("../plugins/manifest-registry.js", () => ({
 
 vi.mock("../plugins/status.js", () => ({
   buildPluginStatusReport: (...args: unknown[]) => buildPluginStatusReport(...args),
+  buildPluginInspectReport: (...args: unknown[]) => buildPluginInspectReport(...args),
+  buildAllPluginInspectReports: (...args: unknown[]) => buildAllPluginInspectReports(...args),
+  buildPluginCompatibilityNotices: vi.fn(() => []),
+  formatPluginCompatibilityNotice: vi.fn(() => ""),
 }));
 
 vi.mock("../plugins/slots.js", () => ({
@@ -150,6 +156,8 @@ export function resetPluginsCliTestState() {
   recordPluginInstall.mockReset();
   clearPluginManifestRegistryCache.mockReset();
   buildPluginStatusReport.mockReset();
+  buildPluginInspectReport.mockReset();
+  buildAllPluginInspectReports.mockReset();
   applyExclusiveSlotSelection.mockReset();
   uninstallPlugin.mockReset();
   updateNpmInstalledPlugins.mockReset();
@@ -190,6 +198,8 @@ export function resetPluginsCliTestState() {
     plugins: [],
     diagnostics: [],
   });
+  buildPluginInspectReport.mockReturnValue(null);
+  buildAllPluginInspectReports.mockReturnValue([]);
   applyExclusiveSlotSelection.mockImplementation(({ config }: { config: OpenClawConfig }) => ({
     config,
     warnings: [],

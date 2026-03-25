@@ -3152,11 +3152,26 @@ module.exports = {
   if (!keys.includes("channel")) {
     throw new Error("runtime channel key missing");
   }
+  if (!keys.includes("modelAuth")) {
+    throw new Error("runtime modelAuth key missing");
+  }
   if (!("channel" in runtime)) {
     throw new Error("runtime channel missing from has check");
   }
+  if (!("modelAuth" in runtime)) {
+    throw new Error("runtime modelAuth missing from has check");
+  }
   if (!Object.getOwnPropertyDescriptor(runtime, "channel")) {
     throw new Error("runtime channel descriptor missing");
+  }
+  if (!Object.getOwnPropertyDescriptor(runtime, "modelAuth")) {
+    throw new Error("runtime modelAuth descriptor missing");
+  }
+  if (typeof runtime.modelAuth?.getApiKeyForModel !== "function") {
+    throw new Error("runtime modelAuth getApiKeyForModel missing");
+  }
+  if (typeof runtime.modelAuth?.resolveApiKeyForProvider !== "function") {
+    throw new Error("runtime modelAuth resolveApiKeyForProvider missing");
   }
 } };`,
     });

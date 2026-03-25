@@ -82,6 +82,22 @@ describe("buildPluginStatusReport", () => {
     );
   });
 
+  it("forwards scoped plugin ids to plugin loading", () => {
+    buildPluginStatusReport({
+      config: {},
+      workspaceDir: "/workspace",
+      onlyPluginIds: ["lossless-claw"],
+    });
+
+    expect(loadOpenClawPluginsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: {},
+        workspaceDir: "/workspace",
+        onlyPluginIds: ["lossless-claw"],
+      }),
+    );
+  });
+
   it("normalizes bundled plugin versions to the core base release", () => {
     loadOpenClawPluginsMock.mockReturnValue({
       plugins: [
@@ -239,6 +255,30 @@ describe("buildPluginStatusReport", () => {
     expect(inspect?.diagnostics).toEqual([
       { level: "warn", pluginId: "google", message: "watch this surface" },
     ]);
+  });
+
+  it("scopes direct inspect loads to the requested plugin id", () => {
+    setPluginLoadResult({
+      plugins: [
+        createPluginRecord({
+          id: "google",
+          name: "Google",
+          description: "Google provider plugin",
+          origin: "bundled",
+          providerIds: ["google"],
+        }),
+      ],
+    });
+
+    const inspect = buildPluginInspectReport({ id: "google", config: {} });
+
+    expect(inspect?.plugin.id).toBe("google");
+    expect(loadOpenClawPluginsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: {},
+        onlyPluginIds: ["google"],
+      }),
+    );
   });
 
   it("builds inspect reports for every loaded plugin", () => {
