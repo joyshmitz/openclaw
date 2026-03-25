@@ -1,24 +1,6 @@
 import type { Command } from "commander";
 import type { MessageCliHelpers } from "./helpers.js";
 
-function resolveThreadCreateRequest(opts: Record<string, unknown>) {
-  const channel = typeof opts.channel === "string" ? opts.channel.trim().toLowerCase() : "";
-  if (channel !== "telegram") {
-    return {
-      action: "thread-create" as const,
-      params: opts,
-    };
-  }
-  const { threadName, ...rest } = opts;
-  return {
-    action: "topic-create" as const,
-    params: {
-      ...rest,
-      name: typeof threadName === "string" ? threadName : undefined,
-    },
-  };
-}
-
 export function registerMessageThreadCommands(message: Command, helpers: MessageCliHelpers) {
   const thread = message.command("thread").description("Thread actions");
 
@@ -35,8 +17,7 @@ export function registerMessageThreadCommands(message: Command, helpers: Message
     .option("-m, --message <text>", "Initial thread message text")
     .option("--auto-archive-min <n>", "Thread auto-archive minutes")
     .action(async (opts) => {
-      const request = resolveThreadCreateRequest(opts);
-      await helpers.runMessageAction(request.action, request.params);
+      await helpers.runMessageAction("thread-create", opts);
     });
 
   helpers
@@ -72,5 +53,3 @@ export function registerMessageThreadCommands(message: Command, helpers: Message
       await helpers.runMessageAction("thread-reply", opts);
     });
 }
-
-export const __test__ = { resolveThreadCreateRequest };
