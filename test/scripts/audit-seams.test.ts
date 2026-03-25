@@ -111,6 +111,31 @@ describe("audit-seams subagent seam classification", () => {
       "subagent-parent-stream",
     ]);
   });
+
+  it("ignores type-only heartbeat imports when classifying runtime cron seams", () => {
+    const source = `
+      import type { HeartbeatRunResult } from "../../infra/heartbeat-wake.js";
+
+      export type CronServiceDeps = {
+        requestHeartbeatNow: (opts?: { reason?: string; agentId?: string; sessionKey?: string }) => void;
+        runHeartbeatOnce?: () => Promise<HeartbeatRunResult>;
+      };
+    `;
+
+    expect(describeSeamKinds("src/cron/service/state.ts", source)).toEqual([]);
+  });
+
+  it("ignores type-only outbound imports when classifying cron media delivery seams", () => {
+    const source = `
+      import type { CliDeps } from "../../cli/outbound-send-deps.js";
+
+      export type DeliveryShape = CliDeps & {
+        mediaUrl?: string;
+      };
+    `;
+
+    expect(describeSeamKinds("src/cron/isolated-agent/run.ts", source)).toEqual([]);
+  });
 });
 
 describe("audit-seams status/help", () => {

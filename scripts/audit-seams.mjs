@@ -551,10 +551,15 @@ function escapeForRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function stripTypeOnlyModuleStatements(source) {
+  return source.replace(/^\s*(?:import|export)\s+type\b[\s\S]*?from\s+["'][^"']+["'];?\s*$/gm, "");
+}
+
 function hasImportSource(source, specifier) {
   const escaped = escapeForRegExp(specifier);
+  const runtimeSource = stripTypeOnlyModuleStatements(source);
   return new RegExp(`from\\s+["']${escaped}["']|import\\s*\\(\\s*["']${escaped}["']\\s*\\)`).test(
-    source,
+    runtimeSource,
   );
 }
 

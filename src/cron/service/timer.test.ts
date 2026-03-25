@@ -1,6 +1,10 @@
 import fs from "node:fs/promises";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { setupCronServiceSuite, writeCronStoreSnapshot } from "../../cron/service.test-harness.js";
+import {
+  setupCronServiceSuite,
+  withCronServiceStateForTest,
+  writeCronStoreSnapshot,
+} from "../../cron/service.test-harness.js";
 import { createCronServiceState } from "../../cron/service/state.js";
 import { onTimer } from "../../cron/service/timer.js";
 import type { CronJob } from "../../cron/types.js";
@@ -54,34 +58,38 @@ describe("cron service timer seam coverage", () => {
       runIsolatedAgentJob: vi.fn(async () => ({ status: "ok" as const })),
     });
 
-    await onTimer(state);
+    await withCronServiceStateForTest(state, async () => {
+      try {
+        await onTimer(state);
 
-    expect(enqueueSystemEvent).toHaveBeenCalledWith("heartbeat seam tick", {
-      agentId: undefined,
-      sessionKey: "agent:main:main",
-      contextKey: "cron:main-heartbeat-job",
+        expect(enqueueSystemEvent).toHaveBeenCalledWith("heartbeat seam tick", {
+          agentId: undefined,
+          sessionKey: "agent:main:main",
+          contextKey: "cron:main-heartbeat-job",
+        });
+        expect(requestHeartbeatNow).toHaveBeenCalledWith({
+          reason: "cron:main-heartbeat-job",
+          agentId: undefined,
+          sessionKey: "agent:main:main",
+        });
+
+        const persisted = JSON.parse(await fs.readFile(storePath, "utf8")) as {
+          jobs: CronJob[];
+        };
+        const job = persisted.jobs[0];
+        expect(job).toBeDefined();
+        expect(job?.state.lastStatus).toBe("ok");
+        expect(job?.state.runningAtMs).toBeUndefined();
+        expect(job?.state.nextRunAtMs).toBe(now + 60_000);
+
+        const delays = timeoutSpy.mock.calls
+          .map(([, delay]) => delay)
+          .filter((delay): delay is number => typeof delay === "number");
+        expect(delays).toContain(60_000);
+      } finally {
+        timeoutSpy.mockRestore();
+      }
     });
-    expect(requestHeartbeatNow).toHaveBeenCalledWith({
-      reason: "cron:main-heartbeat-job",
-      agentId: undefined,
-      sessionKey: "agent:main:main",
-    });
-
-    const persisted = JSON.parse(await fs.readFile(storePath, "utf8")) as {
-      jobs: CronJob[];
-    };
-    const job = persisted.jobs[0];
-    expect(job).toBeDefined();
-    expect(job?.state.lastStatus).toBe("ok");
-    expect(job?.state.runningAtMs).toBeUndefined();
-    expect(job?.state.nextRunAtMs).toBe(now + 60_000);
-
-    const delays = timeoutSpy.mock.calls
-      .map(([, delay]) => delay)
-      .filter((delay): delay is number => typeof delay === "number");
-    expect(delays.some((delay) => delay > 0)).toBe(true);
-
-    timeoutSpy.mockRestore();
   });
 
   it("keeps scheduler progress when task ledger creation fails", async () => {
