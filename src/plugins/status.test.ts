@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createPluginLoadResult, createPluginRecord } from "./status.test-helpers.js";
 
 const loadConfigMock = vi.fn();
 const loadOpenClawPluginsMock = vi.fn();
@@ -26,6 +27,15 @@ vi.mock("../agents/agent-scope.js", () => ({
 vi.mock("../agents/workspace.js", () => ({
   resolveDefaultAgentWorkspaceDir: () => "/default-workspace",
 }));
+
+function setPluginLoadResult(overrides: Partial<ReturnType<typeof createPluginLoadResult>>) {
+  loadOpenClawPluginsMock.mockReturnValue(
+    createPluginLoadResult({
+      plugins: [],
+      ...overrides,
+    }),
+  );
+}
 
 describe("buildPluginStatusReport", () => {
   beforeEach(async () => {
