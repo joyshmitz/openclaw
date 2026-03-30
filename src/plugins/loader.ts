@@ -8,11 +8,6 @@ import type { PluginInstallRecord } from "../config/types.plugins.js";
 import type { GatewayRequestHandler } from "../gateway/server-methods/types.js";
 import { openBoundaryFileSync } from "../infra/boundary-file-read.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
-import {
-  clearMemoryPromptSection,
-  getMemoryPromptSectionBuilder,
-  restoreMemoryPromptSection,
-} from "../memory/prompt-section.js";
 import { createLazyRuntimeMethod, createLazyRuntimeModule } from "../shared/lazy-runtime.js";
 import { resolveUserPath } from "../utils.js";
 import { buildPluginApi } from "./api-builder.js";
